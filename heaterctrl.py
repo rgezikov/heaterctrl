@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import json
+import re
 import sys
 import os
 import subprocess
@@ -8,7 +10,7 @@ import argparse
 
 
 class HeaterLog(object):
-    LOG_FILE=os.path.expanduser("~/heater/log.txt")
+    LOG_FILE=os.path.join(os.path.realpath(os.path.dirname(__file__)), "log.txt")
 
     @staticmethod
     def write(msg, ce=False):
@@ -23,35 +25,37 @@ class HeaterLog(object):
 class HeaterController(object):
     this_script = os.path.realpath(__file__)
     queues = {'0':'p', '1':'v'}
+    task_parse = re.compile(r'(\d+)\t(\w+\s+\w+\s+\d+\s+\d+:\d+:\d+\s+\d+)\s+(\w)\s+\w+')
 
     def __init__(self, id):
         self.id = id
 
-    def set_task(self, time, duration):
+    def remove_tasks(self):
         # remove all existing tasks from the corresponding queue
-        output = subprocess.check_output(["atq", "-q", "{}".format(self.queues[self.id])])
-        for t in output.split("\n"):
-            t = t.split("\t")
-            if len(t) == 2:
-                subprocess.check_output(["atrm", t[0]])
+        for t in self.list_tasks():
+            subprocess.check_output(["atrm", t[0]])
 
-        # switch off if it's running
+    def set_task(self, time, duration):
+        # remove old and possibly running tasks
+        self.remove_tasks()
         self.off()
 
         # set new task
         # command to switch on
         on_cmd  = "{} -o on -i {}".format(HeaterController.this_script, self.id)
         at_cmd = "at -q {} -t {}".format(self.queues[self.id], time)
-        p = subprocess.Popen(at_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+        p = subprocess.Popen(at_cmd, shell=True, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
         (p_stdin, p_stdout, p_stderr) = (p.stdin, p.stdout, p.stderr)
         p_stdin.write(on_cmd)
 
         # command to switch off
         off_cmd = "{} -o off -i {}".format(HeaterController.this_script, self.id)
         time_off = datetime.strptime(time, "%y%m%d%H%M")
-        time_off = time_off + timedelta(seconds=duration)
+        time_off = time_off + timedelta(minutes=duration)
         at_cmd = "at -q {} -t {}".format(self.queues[self.id], time_off.strftime("%y%m%d%H%M"))
-        p = subprocess.Popen(at_cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+        p = subprocess.Popen(at_cmd, shell=True,
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
         (p_stdin, p_stdout, p_stderr) = (p.stdin, p.stdout, p.stderr)
         p_stdin.write(off_cmd)
 
@@ -63,15 +67,27 @@ class HeaterController(object):
         subprocess.check_output(["gpio", "write", str(self.id), "1"])
         subprocess.check_output(["gpio", "mode", str(self.id), "in"])
 
+    def list_tasks(self):
+        res = []
+        output = subprocess.check_output(["atq", "-q", "{}".format(self.queues[self.id])])
+        for t in output.split("\n"):
+            m = HeaterController.task_parse.match(t.strip())
+            if m is not None:
+                time = datetime.strptime(m.group(2), r'%a %b %d %H:%M:%S %Y')
+                res.append((m.group(1), time.strftime(r'%y%m%d%H%M')))
+        return res
+
+operations = ["set", "on", "off", "remove", "list"]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-o", dest="o", help="operation", required=True, default= None, type=str)
+parser.add_argument("-o", dest="o", help="operation ({})".format(operations), required=True, default= None, type=str)
 parser.add_argument("-i", dest="i", help="heater id (0 or 1)", default= None, type=str)
 parser.add_argument("-t", dest="t", help="time (YYMMDDhhmm)", default= None, type=str)
-parser.add_argument("-d", dest="d", help="duration, in seconds", default= None, type=int)
+parser.add_argument("-d", dest="d", help="duration, in minutes, 1..120", default= None, type=int)
+parser.add_argument("-j", dest="j", help="output list in json format", action="store_true")
 args = parser.parse_args()
 
-if args.o not in ["set", "on", "off"]:
+if args.o not in operations:
     HeaterLog.write("Unknown operation", True)
     sys.exit(1)
 
@@ -85,7 +101,7 @@ if args.o == 'set':
         HeaterLog.write("Missing -t parameter", True)
         sys.exit(1)
 
-    if args.d is None or args.d < 60 or args.d > 2*3600:
+    if args.d is None or args.d < 1 or args.d > 120:
         HeaterLog.write("Missing or wrong value for -d parameter", True)
         sys.exit(1)
 
@@ -100,6 +116,19 @@ elif args.o == 'on':
 elif args.o == 'off':
     hctrl = HeaterController(args.i)
     hctrl.off()
+
+elif args.o == "remove":
+    hctrl = HeaterController(args.i)
+    hctrl.remove_tasks()
+
+elif args.o == "list":
+    hctrl = HeaterController(args.i)
+    tasks = hctrl.list_tasks()
+    if args.j:
+        print(json.dumps(tasks))
+    else:
+        for t in tasks:
+            print(str(t))
 
 
 
