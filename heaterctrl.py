@@ -75,6 +75,7 @@ class HeaterController(object):
             if m is not None:
                 time = datetime.strptime(m.group(2), r'%a %b %d %H:%M:%S %Y')
                 res.append((m.group(1), time.strftime(r'%y%m%d%H%M')))
+        res = sorted(res, key=lambda x: x[1])
         return res
 
 operations = ["set", "on", "off", "remove", "list"]
