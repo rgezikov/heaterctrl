@@ -10,7 +10,7 @@ import argparse
 
 
 class HeaterLog(object):
-    LOG_FILE=os.path.join(os.path.realpath(os.path.dirname(__file__)), "log.txt")
+    LOG_FILE="/var/tmp/heater-log.txt"
 
     @staticmethod
     def write(msg, ce=False):
@@ -32,7 +32,8 @@ class HeaterController(object):
 
     def remove_tasks(self):
         # remove all existing tasks from the corresponding queue
-        for t in self.list_tasks():
+        for t in HeaterController.list_tasks(q=HeaterController.queues[self.id]):
+            HeaterLog.write("Removing task {} for heater {} scheduled at {}".format(t[0], self.id, t[1]))
             subprocess.check_output(["atrm", t[0]])
 
     def set_task(self, time, duration):
@@ -41,6 +42,7 @@ class HeaterController(object):
         self.off()
 
         # set new task
+        HeaterLog.write("Starting heater {} at {} for {} min".format(self.id, time, duration))
         # command to switch on
         on_cmd  = "{} -o on -i {}".format(HeaterController.this_script, self.id)
         at_cmd = "at -q {} -t {}".format(self.queues[self.id], time)
@@ -67,15 +69,19 @@ class HeaterController(object):
         subprocess.check_output(["gpio", "write", str(self.id), "1"])
         subprocess.check_output(["gpio", "mode", str(self.id), "in"])
 
-    def list_tasks(self):
+    @staticmethod
+    def list_tasks(q=None):
         res = []
-        output = subprocess.check_output(["atq", "-q", "{}".format(self.queues[self.id])])
+        if q is None:
+            output = subprocess.check_output(["atq"])
+        else:
+            output = subprocess.check_output(["atq", '-q', q])
         for t in output.split("\n"):
             m = HeaterController.task_parse.match(t.strip())
             if m is not None:
                 time = datetime.strptime(m.group(2), r'%a %b %d %H:%M:%S %Y')
-                res.append((m.group(1), time.strftime(r'%y%m%d%H%M')))
-        res = sorted(res, key=lambda x: x[1])
+                res.append((m.group(1), time.strftime(r'%y%m%d%H%M'), m.group(3)))
+        res = sorted(res, key=lambda x: x[2] + x[1])
         return res
 
 operations = ["set", "on", "off", "remove", "list"]
@@ -106,7 +112,6 @@ if args.o == 'set':
         HeaterLog.write("Missing or wrong value for -d parameter", True)
         sys.exit(1)
 
-    HeaterLog.write("Starting heater {} at {} for {} sec".format(args.i, args.t, args.d))
     hctrl = HeaterController(args.i)
     hctrl.set_task(args.t, args.d)
 
@@ -123,8 +128,7 @@ elif args.o == "remove":
     hctrl.remove_tasks()
 
 elif args.o == "list":
-    hctrl = HeaterController(args.i)
-    tasks = hctrl.list_tasks()
+    tasks = HeaterController.list_tasks()
     if args.j:
         print(json.dumps(tasks))
     else:
