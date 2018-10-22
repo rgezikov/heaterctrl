@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.9/angular.min.js"></script>
+<head>
+    <meta charset="UTF-8">
+    <title>Car Heater</title>
+</head>
+<body>
+    <div ng-app="HeaterApp" ng-controller="heaterCtrl">
+        <table>
+            <tr ng-repeat="task in tasks" >
+                <td><button ng-click="change_channel_state(task.id)">{{ task.state }}</button></td>
+                <td>{{ task.time_on }}</td>
+                <td>{{ task.duration}}</td>
+                <td>SET</td>
+                <td>CLR</td>
+            </tr>
+        </table>
+    </div>
+
+    <script>
+        function dstr2date(dstr){
+            Y = parseInt(dstr.substring(0, 2)) + 2000;
+            M = parseInt(dstr.substring(2, 4)) - 1;
+            D = parseInt(dstr.substring(4, 6));
+            h = parseInt(dstr.substring(6, 8));
+            m = parseInt(dstr.substring(8));
+            return new Date(Y, M, D, h, m, 0, 0);
+        }
+
+        function pad2(x) {
+            return x < 10 ? '0' + x : x;
+        }
+
+        function date2str(d){
+          Y = d.getFullYear();
+          M = pad2(d.getMonth() + 1);
+          D = pad2(d.getDate());
+          h = pad2(d.getHours());
+          m = pad2(d.getMinutes());
+          return `${Y}-${M}-${D} ${h}:${m}`;
+        }
+
+        function diff_minutes(date1, date2) {
+          var date1_sec = date1.getTime() / 1000;
+          var date2_sec = date2.getTime() / 1000;
+          var difference = date2_sec - date1_sec;
+          return Math.round(difference / 60);
+        }
+
+        var app = angular.module("HeaterApp", []);
+
+        app.controller("heaterCtrl", function($scope, $http, $httpParamSerializerJQLike) {
+
+            $scope.change_channel_state = function(id) {
+                console.log("change_channel_state(" + id + ")");
+                _request_state = $scope.tasks[id].state == "ON" ? "off" : "on";
+                console.log("_request_state=" + _request_state);
+                $http({
+                    url: '/heater/heaterctrl.php',
+                    method: "POST",
+                    data: $httpParamSerializerJQLike({
+                    "cmd":_request_state,
+                    "id":id
+                    })
+                }).then(function(response) {
+                    $scope.load_list();
+                });
+            };
+
+            $scope.tasks = [{}, {}];
+
+            for (i = 0; i < $scope.tasks.length; i++){
+               $scope.tasks[i].id = i;
+               $scope.tasks[i].state = "OFF";
+               $scope.tasks[i].time_on = "Not set";
+               $scope.tasks[i].duration = "Not set";
+            }
+
+            $http.defaults.headers.post["Content-Type"] = "application/x-www-form-urlencoded";
+
+            $scope.load_list = function() {
+                $http({
+                  url: '/heater/heaterctrl.php',
+                  method: "POST",
+                  data: $httpParamSerializerJQLike({
+                    "cmd":"list"
+                  })
+                }).then(function(response) {
+                    rdt = response.data.tasks;
+                    for (i = 0; i < rdt.length;) {
+                        idx = -1;
+                        if (rdt[i][2] == "p")
+                            idx = 0;
+                        else if (rdt[i][2] == "v")
+                            idx = 1;
+                        if (idx < 0) continue;
+                        if ((i + 1 < rdt.length) && (rdt[i][2] == rdt[i + 1][2])) {
+                            // both on and off tasks are planned
+                            start_time = dstr2date(rdt[i][1]);
+                            stop_time = dstr2date(rdt[i+1][1]);
+                            $scope.tasks[idx].state = rdt[i][3] == "off" ? "OFF" : "ON";
+                            $scope.tasks[idx].time_on = date2str(start_time);
+                            $scope.tasks[idx].duration = diff_minutes(start_time, stop_time);
+                            i = i + 2;
+                        } else {
+                            // only off tasks is planned
+                            start_time = new Date();
+                            stop_time = dstr2date(rdt[i][1]);
+                            $scope.tasks[idx].state = rdt[i][3] == "off" ? "OFF" : "ON";
+                            $scope.tasks[idx].time_on = "";
+                            $scope.tasks[idx].duration = diff_minutes(start_time, stop_time);
+                            i = i + 1;
+                        }
+                    }
+                 });
+             };
+             $scope.load_list();
+        });
+    </script>
+</body>
+</html>

@@ -14,17 +14,18 @@ class HeaterLog(object):
 
     @staticmethod
     def write(msg, ce=False):
-        timestamp = datetime.now().strftime('%y%m%d-%H%M%S')
-        with open(HeaterLog.LOG_FILE, "a") as lf:
-            lf.write("{}\t{}\n".format(timestamp, msg))
-            if ce:
-                sys.stderr.write(msg)
-                sys.stderr.write("\n")
-
+        # timestamp = datetime.now().strftime('%y%m%d-%H%M%S')
+        # with open(HeaterLog.LOG_FILE, "a") as lf:
+        #     lf.write("{}\t{}\n".format(timestamp, msg))
+        #     if ce:
+        #         sys.stderr.write(msg)
+        #         sys.stderr.write("\n")
+        print(msg)
 
 class HeaterController(object):
     this_script = os.path.realpath(__file__)
     queues = {'0':'p', '1':'v'}
+    pin_ids = {'p':'0', 'v':'1'}
     task_parse = re.compile(r'(\d+)\t(\w+\s+\w+\s+\d+\s+\d+:\d+:\d+\s+\d+)\s+(\w)\s+\w+')
 
     def __init__(self, id):
@@ -32,11 +33,12 @@ class HeaterController(object):
 
     def remove_tasks(self):
         # remove all existing tasks from the corresponding queue
-        for t in HeaterController.list_tasks(q=HeaterController.queues[self.id]):
+        for t in HeaterController.list_tasks(q=HeaterController.queues[self.id])["tasks"]:
             HeaterLog.write("Removing task {} for heater {} scheduled at {}".format(t[0], self.id, t[1]))
             subprocess.check_output(["atrm", t[0]])
 
     def set_task(self, time, duration):
+        HeaterLog.write("HeaterController.set_task('{}', {})".format(time, duration))
         # remove old and possibly running tasks
         self.remove_tasks()
         self.off()
@@ -71,18 +73,20 @@ class HeaterController(object):
 
     @staticmethod
     def list_tasks(q=None):
-        res = []
+        tasks = []
         if q is None:
             output = subprocess.check_output(["atq"])
         else:
-            output = subprocess.check_output(["atq", '-q', q])
+            output = subprocess.check_output(["atq", "-q", q])
         for t in output.split("\n"):
             m = HeaterController.task_parse.match(t.strip())
             if m is not None:
                 time = datetime.strptime(m.group(2), r'%a %b %d %H:%M:%S %Y')
-                res.append((m.group(1), time.strftime(r'%y%m%d%H%M'), m.group(3)))
-        res = sorted(res, key=lambda x: x[2] + x[1])
-        return res
+                pin = HeaterController.pin_ids[m.group(3)]
+                state = subprocess.check_output(["gpio", 'read', pin]).strip()
+                tasks.append((m.group(1), time.strftime(r'%y%m%d%H%M'), m.group(3), "on" if state=="0" else "off"))
+        tasks = sorted(tasks, key=lambda x: x[2] + x[1])
+        return {"tasks":tasks}
 
 operations = ["set", "on", "off", "remove", "list"]
 
@@ -97,7 +101,6 @@ args = parser.parse_args()
 if args.o not in operations:
     HeaterLog.write("Unknown operation", True)
     sys.exit(1)
-
 
 if args.o == 'set':
     if args.i is None or args.i not in ["0", "1"]:
