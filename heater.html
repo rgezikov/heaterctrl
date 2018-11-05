@@ -20,6 +20,10 @@
 
     <script>
         function dstr2date(dstr){
+            if(dstr === "") {
+                return "";
+            }
+
             Y = parseInt(dstr.substring(0, 2)) + 2000;
             M = parseInt(dstr.substring(2, 4)) - 1;
             D = parseInt(dstr.substring(4, 6));
@@ -53,9 +57,9 @@
         app.controller("heaterCtrl", function($scope, $http, $httpParamSerializerJQLike) {
 
             $scope.change_channel_state = function(id) {
-                console.log("change_channel_state(" + id + ")");
+                // console.log("change_channel_state(" + id + ")");
                 _request_state = $scope.tasks[id].state == "ON" ? "off" : "on";
-                console.log("_request_state=" + _request_state);
+                // console.log("_request_state=" + _request_state);
                 $http({
                     url: '/heater/heaterctrl.php',
                     method: "POST",
@@ -79,6 +83,24 @@
 
             $http.defaults.headers.post["Content-Type"] = "application/x-www-form-urlencoded";
 
+            $scope.task_to_fields = function (idx, t) {
+                _now = new Date();
+                _state = t["state"] == "off" ? "OFF" : "ON";
+                $scope.tasks[idx].state = _state;
+                start_time = dstr2date(t["on_time"]);
+                stop_time = dstr2date(t["off_time"]);
+                $scope.tasks[idx].time_on = start_time !== "" ? date2str(start_time) : "";
+                if(stop_time !== "") {
+                    if(start_time === "") {
+                        start_time = Date();
+                    }
+                    duration = diff_minutes(start_time, stop_time);
+                } else {
+                    duration = "";
+                }
+                $scope.tasks[idx].duration = duration;
+            }
+
             $scope.load_list = function() {
                 $http({
                   url: '/heater/heaterctrl.php',
@@ -88,31 +110,8 @@
                   })
                 }).then(function(response) {
                     rdt = response.data.tasks;
-                    for (i = 0; i < rdt.length;) {
-                        idx = -1;
-                        if (rdt[i][2] == "p")
-                            idx = 0;
-                        else if (rdt[i][2] == "v")
-                            idx = 1;
-                        if (idx < 0) continue;
-                        if ((i + 1 < rdt.length) && (rdt[i][2] == rdt[i + 1][2])) {
-                            // both on and off tasks are planned
-                            start_time = dstr2date(rdt[i][1]);
-                            stop_time = dstr2date(rdt[i+1][1]);
-                            $scope.tasks[idx].state = rdt[i][3] == "off" ? "OFF" : "ON";
-                            $scope.tasks[idx].time_on = date2str(start_time);
-                            $scope.tasks[idx].duration = diff_minutes(start_time, stop_time);
-                            i = i + 2;
-                        } else {
-                            // only off tasks is planned
-                            start_time = new Date();
-                            stop_time = dstr2date(rdt[i][1]);
-                            $scope.tasks[idx].state = rdt[i][3] == "off" ? "OFF" : "ON";
-                            $scope.tasks[idx].time_on = "";
-                            $scope.tasks[idx].duration = diff_minutes(start_time, stop_time);
-                            i = i + 1;
-                        }
-                    }
+                    $scope.task_to_fields(0, rdt["p"]);
+                    $scope.task_to_fields(1, rdt["v"]);
                  });
              };
              $scope.load_list();
