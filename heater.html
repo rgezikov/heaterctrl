@@ -8,12 +8,19 @@
 <body>
     <div ng-app="HeaterApp" ng-controller="heaterCtrl">
         <table>
+            <tr>
+                <th>Status</th>
+                <th>Start time</th>
+                <th>Duration</th>
+                <th></th>
+                <th></th>
+            </tr>
             <tr ng-repeat="task in tasks" >
                 <td><button ng-click="change_channel_state(task.id)">{{ task.state }}</button></td>
-                <td>{{ task.time_on }}</td>
-                <td>{{ task.duration}}</td>
-                <td>SET</td>
-                <td>CLR</td>
+                <td><input type="text" ng-model="task.time_on"></td>
+                <td><input type="text" ng-model="task.duration"></td>
+                <td><button ng-click="set_task_times(task.id)">SET</button></td>
+                <td><button ng-click="remove_task(task.id)">DEL</button></td>
             </tr>
         </table>
     </div>
@@ -56,10 +63,17 @@
 
         app.controller("heaterCtrl", function($scope, $http, $httpParamSerializerJQLike) {
 
+            $scope.set_task_times = function(id) {
+                console.log("set_task_times(" + id + ")");
+            }
+
+            $scope.remove_task = function(id) {
+                console.log("remove_task(" + id + ")");
+            }
+
             $scope.change_channel_state = function(id) {
-                // console.log("change_channel_state(" + id + ")");
+                console.log("change_channel_state(" + id + ")");
                 _request_state = $scope.tasks[id].state == "ON" ? "off" : "on";
-                // console.log("_request_state=" + _request_state);
                 $http({
                     url: '/heater/heaterctrl.php',
                     method: "POST",
@@ -92,7 +106,7 @@
                 $scope.tasks[idx].time_on = start_time !== "" ? date2str(start_time) : "";
                 if(stop_time !== "") {
                     if(start_time === "") {
-                        start_time = Date();
+                        start_time = new Date();
                     }
                     duration = diff_minutes(start_time, stop_time);
                 } else {
@@ -114,6 +128,7 @@
                     $scope.task_to_fields(1, rdt["v"]);
                  });
              };
+
              $scope.load_list();
         });
     </script>
