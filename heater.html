@@ -4,6 +4,18 @@
 <head>
     <meta charset="UTF-8">
     <title>Car Heater</title>
+    <style>
+        input
+        {
+          width: 150px;
+          vertical-align: middle;
+        }
+
+        .duration_field
+        {
+            width: 150px;
+        }
+    </style>
 </head>
 <body>
     <div ng-app="HeaterApp" ng-controller="heaterCtrl">
@@ -17,12 +29,14 @@
             </tr>
             <tr ng-repeat="task in tasks" >
                 <td><button ng-click="change_channel_state(task.id)">{{ task.state }}</button></td>
+                <!--  onkeypress="this.style.width = ((this.value.length + 1) * 8) + 'px';" -->
                 <td><input type="text" ng-model="task.time_on"></td>
-                <td><input type="text" ng-model="task.duration"></td>
+                <td><input type="text" ng-model="task.duration" class="duration_field"></td>
                 <td><button ng-click="set_task_times(task.id)">SET</button></td>
                 <td><button ng-click="remove_task(task.id)">DEL</button></td>
             </tr>
         </table>
+        Time format: YY-MM-DD hh:mm, YYMMDDhhmm
     </div>
 
     <script>
@@ -44,7 +58,7 @@
         }
 
         function date2str(d){
-          Y = d.getFullYear();
+          Y = d.getFullYear() - 2000;
           M = pad2(d.getMonth() + 1);
           D = pad2(d.getDate());
           h = pad2(d.getHours());
@@ -64,15 +78,43 @@
         app.controller("heaterCtrl", function($scope, $http, $httpParamSerializerJQLike) {
 
             $scope.set_task_times = function(id) {
-                console.log("set_task_times(" + id + ")");
+                // console.log("set_task_times(" + id + ")");
+                _time_str = $scope.tasks[id].time_on;
+                _time_str = _time_str.replace(/ /g, "").replace(/:/g, "").replace(/-/g, "");
+                _duration = $scope.tasks[id].duration;
+                // console.log("_time_str:" + _time_str + ", _duration" + _duration);
+                $http({
+                    url: '/heater/heaterctrl.php',
+                    method: "POST",
+                    data: $httpParamSerializerJQLike({
+                    "cmd":"set",
+                    "id":id,
+                    "time":_time_str,
+                    "duration": _duration
+                    })
+                }).then(function(response) {
+                    rdt = response.data.tasks;
+                    $scope.parse_list(rdt);
+                });
             }
 
             $scope.remove_task = function(id) {
-                console.log("remove_task(" + id + ")");
+                // console.log("remove_task(" + id + ")");
+                $http({
+                    url: '/heater/heaterctrl.php',
+                    method: "POST",
+                    data: $httpParamSerializerJQLike({
+                    "cmd":"remove",
+                    "id":id
+                    })
+                }).then(function(response) {
+                    rdt = response.data.tasks;
+                    $scope.parse_list(rdt);
+                });
             }
 
             $scope.change_channel_state = function(id) {
-                console.log("change_channel_state(" + id + ")");
+                // console.log("change_channel_state(" + id + ")");
                 _request_state = $scope.tasks[id].state == "ON" ? "off" : "on";
                 $http({
                     url: '/heater/heaterctrl.php',
@@ -115,6 +157,11 @@
                 $scope.tasks[idx].duration = duration;
             }
 
+            $scope.parse_list = function(tasks) {
+                $scope.task_to_fields(0, tasks["p"]);
+                $scope.task_to_fields(1, tasks["v"]);
+            }
+
             $scope.load_list = function() {
                 $http({
                   url: '/heater/heaterctrl.php',
@@ -124,9 +171,8 @@
                   })
                 }).then(function(response) {
                     rdt = response.data.tasks;
-                    $scope.task_to_fields(0, rdt["p"]);
-                    $scope.task_to_fields(1, rdt["v"]);
-                 });
+                    $scope.parse_list(rdt);
+                });
              };
 
              $scope.load_list();

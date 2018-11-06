@@ -12,7 +12,7 @@ import time
 
 class HeaterLog(object):
     LOG_FILE="/var/tmp/heater-log.txt"
-
+    ENABLED = False
     @staticmethod
     def write(msg, ce=False):
         # timestamp = datetime.now().strftime('%y%m%d-%H%M%S')
@@ -21,7 +21,8 @@ class HeaterLog(object):
         #     if ce:
         #         sys.stderr.write(msg)
         #         sys.stderr.write("\n")
-        print(msg)
+        if HeaterLog.ENABLED:
+            print(msg)
 
 class HeaterController(object):
     this_script = os.path.realpath(__file__)
@@ -39,13 +40,13 @@ class HeaterController(object):
     def remove_tasks(self):
         # remove all existing tasks from the corresponding queue
         qid = HeaterController.queues[self.id]
-        for t in HeaterController.list_tasks(q=qid)["tasks"]:
-            tid = t[qid]["on_id"]
-            if not tid:
-                tid = t[qid]["off_id"]
-            assert len(tid) > 0, "Cannot process task: '{}'".format(str(t))
-            HeaterLog.write("Removing task {} for heater {}".format(tid, self.id))
-            subprocess.check_output(["atrm", tid])
+        t = HeaterController.list_tasks(q=qid)["tasks"][qid]
+        if len(t["on_id"]) > 0:
+            HeaterLog.write("Removing task {} for heater {}".format(t["on_id"], self.id))
+            subprocess.check_output(["atrm", t["on_id"]])
+        if len(t["off_id"]) > 0:
+            HeaterLog.write("Removing task {} for heater {}".format(t["off_id"], self.id))
+            subprocess.check_output(["atrm", t["off_id"]])
 
     def set_task(self, time, duration):
         HeaterLog.write("HeaterController.set_task('{}', {})".format(time, duration))
@@ -162,7 +163,11 @@ if __name__ == "__main__":
     parser.add_argument("-t", dest="t", help="time (YYMMDDhhmm)", default= None, type=str)
     parser.add_argument("-d", dest="d", help="duration, in minutes, 1..120", default= None, type=int)
     parser.add_argument("-j", dest="j", help="output list in json format", action="store_true")
+    parser.add_argument("-b", dest="b", help="Enable debug output", action="store_true")
     args = parser.parse_args()
+
+    if args.b:
+        HeaterLog.ENABLED = True
 
     if args.o not in operations:
         HeaterLog.write("Unknown operation", True)
