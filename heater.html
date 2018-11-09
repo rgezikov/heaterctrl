@@ -82,7 +82,7 @@
                 _time_str = $scope.tasks[id].time_on;
                 _time_str = _time_str.replace(/ /g, "").replace(/:/g, "").replace(/-/g, "");
                 _duration = $scope.tasks[id].duration;
-                // console.log("_time_str:" + _time_str + ", _duration" + _duration);
+                // console.log("_time_str:" + _time_str + ", _duration:" + _duration);
                 $http({
                     url: '/heater/heaterctrl.php',
                     method: "POST",

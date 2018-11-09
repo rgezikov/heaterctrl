@@ -11,18 +11,17 @@ import time
 
 
 class HeaterLog(object):
-    LOG_FILE="/var/tmp/heater-log.txt"
+    LOG_FILE="/tmp/heater-log.txt"
     ENABLED = False
     @staticmethod
-    def write(msg, ce=False):
-        # timestamp = datetime.now().strftime('%y%m%d-%H%M%S')
-        # with open(HeaterLog.LOG_FILE, "a") as lf:
-        #     lf.write("{}\t{}\n".format(timestamp, msg))
-        #     if ce:
-        #         sys.stderr.write(msg)
-        #         sys.stderr.write("\n")
-        if HeaterLog.ENABLED:
-            print(msg)
+    def write(msg):
+        # if HeaterLog.ENABLED:
+        #     timestamp = datetime.now().strftime('%y%m%d-%H%M%S')
+        #     with open(HeaterLog.LOG_FILE, "a") as lf:
+        #         lf.write("{}\t{}\n".format(timestamp, msg))
+        #     # print(msg)
+        pass
+
 
 class HeaterController(object):
     this_script = os.path.realpath(__file__)
@@ -58,7 +57,9 @@ class HeaterController(object):
         HeaterLog.write("Starting heater {} at {} for {} min".format(self.id, time, duration))
         # command to switch on
         on_cmd  = "{} -o on -i {}".format(HeaterController.this_script, self.id)
+        HeaterLog.write("on_cmd = '{}'".format(on_cmd))
         at_cmd = "at -q {} -t {}".format(self.queues[self.id], time)
+        HeaterLog.write("at_cmd = '{}'".format(at_cmd))
         p = subprocess.Popen(at_cmd, shell=True, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
         (p_stdin, p_stdout, p_stderr) = (p.stdin, p.stdout, p.stderr)
@@ -66,9 +67,11 @@ class HeaterController(object):
 
         # command to switch off
         off_cmd = "{} -o off -i {}".format(HeaterController.this_script, self.id)
+        HeaterLog.write("off_cmd = '{}'".format(off_cmd))
         time_off = datetime.strptime(time, "%y%m%d%H%M")
-        time_off = time_off + timedelta(minutes=duration)
+        time_off = time_off + timedelta(minutes=int(duration))
         at_cmd = "at -q {} -t {}".format(self.queues[self.id], time_off.strftime("%y%m%d%H%M"))
+        HeaterLog.write("at_cmd = '{}'".format(at_cmd))
         p = subprocess.Popen(at_cmd, shell=True,
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
         (p_stdin, p_stdout, p_stderr) = (p.stdin, p.stdout, p.stderr)
@@ -170,20 +173,20 @@ if __name__ == "__main__":
         HeaterLog.ENABLED = True
 
     if args.o not in operations:
-        HeaterLog.write("Unknown operation", True)
+        HeaterLog.write("Unknown operation")
         sys.exit(1)
 
     if args.o == 'set':
         if args.i is None or args.i not in ["0", "1"]:
-            HeaterLog.write("Missing or wrong value for -i parameter", True)
+            HeaterLog.write("Missing or wrong value for -i parameter")
             sys.exit(1)
 
         if args.t is None:
-            HeaterLog.write("Missing -t parameter", True)
+            HeaterLog.write("Missing -t parameter")
             sys.exit(1)
 
         if args.d is None or args.d < 1 or args.d > 120:
-            HeaterLog.write("Missing or wrong value for -d parameter", True)
+            HeaterLog.write("Missing or wrong value for -d parameter")
             sys.exit(1)
 
         hctrl = HeaterController(args.i)
