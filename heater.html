@@ -35,6 +35,7 @@
                 <td><button ng-click="set_task_times(task.id)">SET</button></td>
                 <td><button ng-click="remove_task(task.id)">DEL</button></td>
             </tr>
+            <tr><td style="text-align: center" colspan="5"><button ng-click="refresh_tasks()">REFRESH</button></td></tr>
         </table>
         Time format: YY-MM-DD hh:mm, YYMMDDhhmm
     </div>
@@ -96,6 +97,11 @@
                     rdt = response.data.tasks;
                     $scope.parse_list(rdt);
                 });
+            }
+
+            $scope.refresh_tasks = function(id) {
+                // console.log("refresh_tasks()");
+                $scope.load_list();
             }
 
             $scope.remove_task = function(id) {
