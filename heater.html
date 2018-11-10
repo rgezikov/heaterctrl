@@ -71,7 +71,8 @@
           var date1_sec = date1.getTime() / 1000;
           var date2_sec = date2.getTime() / 1000;
           var difference = date2_sec - date1_sec;
-          return Math.round(difference / 60);
+          var diff = difference / 60.0;
+          return diff < 1 ? Math.round( diff * 10 + Number.EPSILON ) / 10 : Math.round(diff);
         }
 
         var app = angular.module("HeaterApp", []);
